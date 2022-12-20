@@ -16,12 +16,22 @@
 import socket
 import signal
 import sys
+import json
 
 ################
 #   Globals
 ################
-HOST = '127.0.0.1'
-PORT = 10000
+
+CONFIG_FILE = 'config.json'
+try:
+    with open(CONFIG_FILE) as f:
+        CONFIG = json.load(f)
+except Exception as e:
+    print("Cannot open configuration file " + str(CONFIG_FILE) + ": " + str(e))
+    sys.exit(1)
+
+HOST = CONFIG["socket_host"]
+PORT = CONFIG["socket_port"]
 
 ##################################################################
 

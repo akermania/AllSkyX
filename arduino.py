@@ -33,30 +33,41 @@ import subprocess
 ################
 #   Globals
 ################
+
+CONFIG_FILE = 'config.json'
+try:
+    with open(CONFIG_FILE) as f:
+        CONFIG = json.load(f)
+except Exception as e:
+    print("Cannot open configuration file " + str(CONFIG_FILE) + ": " + str(e))
+    sys.exit(1)
+
 # Command timeout to Arduino
-TIMEOUT = 10
+TIMEOUT = CONFIG["timeout"]
 # Socket receive max length
 MAX_LENGTH = 4096
 # Every X seconds to get sensors data from Arduino 
-INTERVALS = 3
+INTERVALS = CONFIG["intervals"]
 # Socket connection 
-PORT = 10000
-HOST = '127.0.0.1'
+PORT = CONFIG["socket_port"]
+HOST = CONFIG["socket_host"]
 # Arduino USB connection 
-TTY = "/dev/ttyUSB0"
-BAUD = 9600
-PERIODIC_COMMAND = "getSensors"
+TTY = CONFIG["tty"]
+BAUD = CONFIG["baud"]
+PERIODIC_COMMAND = CONFIG["periodic_command"]
 #Influx DB connection
-INFLUX_DB_SERVER = 'http://localhost:8086'
-INFLUX_DB_SENSORS = 'sensors_data'
-INFLUX_DB_EVENTS = 'events'
+INFLUX_DB_SERVER = CONFIG["influx_db_server"]
+INFLUX_DB_SENSORS = CONFIG["influx_db_sensors"]
+INFLUX_DB_EVENTS = CONFIG["influx_db_events"]
+LOCATION = CONFIG["location"]
 # JSON file with sensors calibrations 
-CALIBRATION_FILE = 'calibrations.json'
+CALIBRATION_FILE = CONFIG["calibrations_file"]
 # RPi GPIO Pin the fan is connected to
-FAN_PIN = 14
+FAN_PIN = CONFIG["fan_gpio_pin"]
 # Silence error events for X times
-SHUT_UP_INTERVAL = 10
+SHUT_UP_INTERVAL = CONFIG["shut_up_interval"]
 CURRENT_SHUT_UP_COUNT = {}
+
 
 ##################################################################
 
@@ -94,7 +105,7 @@ def write_to_db(domain,response_json,measurement):
                 {
                     "measurement": measurement,
                     "tags": {
-                        "Ort": "Germany",
+                        "Ort": LOCATION,
                         "domain": domain
                     },
                     "time": datetime.utcnow(),
@@ -110,11 +121,11 @@ def write_to_db(domain,response_json,measurement):
 def check_response(response_json):
     if(response_json["ok"] == "1"):
         if("sht31a_temp" in response_json):
-            write_to_db(INFLUX_DB_SENSORS,response_json,"sensors_data")
+            write_to_db(INFLUX_DB_SENSORS,response_json,CONFIG["influx_db_sensors"])
         else:
-            write_to_db(INFLUX_DB_EVENTS,response_json,"events")
+            write_to_db(INFLUX_DB_EVENTS,response_json,CONFIG["influx_db_events"])
     elif("error" in response_json):
-        write_to_db(INFLUX_DB_EVENTS,response_json,"events")
+        write_to_db(INFLUX_DB_EVENTS,response_json,CONFIG["influx_db_events"])
     else:
         print_error_to_db("check_response","Something went wrong")
         return 1
@@ -239,7 +250,7 @@ def load_calibrations_file():
 
 # Connect to InfluxDB
 def connect_to_db():
-    dbClient = InfluxDBClient(INFLUX_DB_SERVER, org="my-org")
+    dbClient = InfluxDBClient(INFLUX_DB_SERVER, org=CONFIG["influx_db_org"])
     write_api = dbClient.write_api(write_options=SYNCHRONOUS)
     print_debug("Connected to InfluxDB at " + str(INFLUX_DB_SERVER))
     return dbClient,write_api
@@ -252,7 +263,7 @@ def print_error_to_db(function_type,message):
     if(function_type not in CURRENT_SHUT_UP_COUNT):
         CURRENT_SHUT_UP_COUNT[function_type] = 10
     if(CURRENT_SHUT_UP_COUNT[function_type] >= SHUT_UP_INTERVAL):
-        write_to_db(INFLUX_DB_EVENTS,json.loads('{"ok" : "0", "error" : "[' + str(function_type) + '] ' + str(message) + '"}'),"events")
+        write_to_db(INFLUX_DB_EVENTS,json.loads('{"ok" : "0", "error" : "[' + str(function_type) + '] ' + str(message) + '"}'),CONFIG["influx_db_events"])
         CURRENT_SHUT_UP_COUNT[function_type] = 0
     else:
         CURRENT_SHUT_UP_COUNT[function_type] = CURRENT_SHUT_UP_COUNT + 1
@@ -279,24 +290,24 @@ def fan_control(e):
     IO.setwarnings(False)
     IO.setmode (IO.BCM)
     IO.setup(FAN_PIN,IO.OUT)
-    fan = IO.PWM(FAN_PIN,100)
+    fan = IO.PWM(FAN_PIN,CONFIG["fan_pwm"])
     fan.start(100)
     currentDuty = 100
     while(True):
         temp = get_temp()
-        write_to_db(INFLUX_DB_SENSORS,json.loads('{"ok" : "1", "cpu_temp" : "' + str(temp) + '", "current_fan_speed" : "' + str(currentDuty) + '"}'),"sensors_data")
-        if temp > 60:
-            fan.ChangeDutyCycle(100)
-            currentDuty = 100
-        elif temp > 50:
-            fan.ChangeDutyCycle(85)
-            currentDuty = 85
-        elif temp > 40:
-            fan.ChangeDutyCycle(70)
-            currentDuty = 70
+        write_to_db(INFLUX_DB_SENSORS,json.loads('{"ok" : "1", "cpu_temp" : "' + str(temp) + '", "current_fan_speed" : "' + str(currentDuty) + '"}'),CONFIG["influx_db_sensors"])
+        if temp > CONFIG["high_cpu_temp"]["temp"]:
+            fan.ChangeDutyCycle(CONFIG["high_cpu_temp"]["fan_speed"])
+            currentDuty = CONFIG["high_cpu_temp"]["fan_speed"]
+        elif temp > CONFIG["mid_high_cpu_temp"]["fan_speed"]:
+            fan.ChangeDutyCycle(CONFIG["mid_high_cpu_temp"]["fan_speed"])
+            currentDuty = CONFIG["mid_high_cpu_temp"]["fan_speed"]
+        elif temp > CONFIG["mid_low_cpu_temp"]["fan_speed"]:
+            fan.ChangeDutyCycle(CONFIG["mid_low_cpu_temp"]["fan_speed"])
+            currentDuty = CONFIG["mid_low_cpu_temp"]["fan_speed"]
         else:
-            fan.ChangeDutyCycle(30)
-            currentDuty = 30
+            fan.ChangeDutyCycle(CONFIG["low_cpu_temp"]["fan_speed"])
+            currentDuty = CONFIG["low_cpu_temp"]["fan_speed"]
         time.sleep(10) 
 
 
@@ -315,8 +326,14 @@ try:
         print_debug("Debug mode")
 except:
     pass
+try: 
+    if(CONFIG["debug"] == True):
+        isDebug = True
+        print_debug("Debug mode")
+except:
+    pass
 
-
+    
 calibrations = load_calibrations_file()
 dbClient,write_api = connect_to_db()
 
