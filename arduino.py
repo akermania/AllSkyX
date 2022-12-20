@@ -29,6 +29,7 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 from datetime import datetime
 import RPi.GPIO as IO
 import subprocess
+import signal
 
 ################
 #   Globals
@@ -313,8 +314,26 @@ def fan_control(e):
 
 ##################################################################
 
+
+# CTRL+C Handler
+def signal_handler(sig, frame):
+    close()
+
+
+##################################################################
+
+# Close socket and exit
+def close():
+    print("Closing...")
+    process1.terminate()
+    process2.terminate()
+    process3.terminate()
+    sys.exit(0)
+
+##################################################################
 # Main 
 # Connect to Arduino and start processes
+signal.signal(signal.SIGINT, signal_handler)
 e = Event()
 
 # Check if debug mode
@@ -362,8 +381,3 @@ with serial.Serial(TTY, BAUD, timeout=1) as arduino:
 if(not isConnected):
     print_debug("Error connecting to Arduino")
     sys.exit(1)
-
-
-
-
-            
