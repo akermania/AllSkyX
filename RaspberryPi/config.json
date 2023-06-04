@@ -14,6 +14,7 @@
     "location" : "Germany",
     "calibrations_file" : "calibrations.json",
     "fan_gpio_pin" : 14,
+    "fan_case_gpio_pin" : 15,
     "shut_up_interval" : 10,
     "fan_pwm" : 100,
     "high_cpu_temp" : {
