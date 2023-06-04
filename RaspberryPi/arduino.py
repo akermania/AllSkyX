@@ -65,6 +65,7 @@ LOCATION = CONFIG["location"]
 CALIBRATION_FILE = CONFIG["calibrations_file"]
 # RPi GPIO Pin the fan is connected to
 FAN_PIN = CONFIG["fan_gpio_pin"]
+FAN_CASE_PIN = CONFIG["fan_case_gpio_pin"]
 # Silence error events for X times
 SHUT_UP_INTERVAL = CONFIG["shut_up_interval"]
 CURRENT_SHUT_UP_COUNT = {}
@@ -157,9 +158,13 @@ def wait_and_print():
         return 1
     while(arduino.inWaiting()>0):
         response = arduino.readline().decode('utf-8').rstrip()
-    response,response_json = get_response(response)
-    if(check_response(response_json)):
-        return 1
+    try:
+        response,response_json = get_response(response)
+        if(check_response(response_json)):
+            return 1
+    except:
+        pass
+        return 0
     arduino.flushInput()
     return 0
 
@@ -314,6 +319,28 @@ def fan_control(e):
 
 ##################################################################
 
+# Process 4 to control the case fan
+def fan_case_control(e):
+    IO.setwarnings(False)
+    IO.setmode (IO.BCM)
+    IO.setup(FAN_CASE_PIN,IO.OUT)
+    fan = IO.PWM(FAN_CASE_PIN,CONFIG["fan_pwm"])
+    fan.start(100)
+    currentDuty = 100
+    while(True):
+        temp = get_temp()
+        write_to_db(INFLUX_DB_SENSORS,json.loads('{"ok" : "1", "cpu_temp" : "' + str(temp) + '", "current_case_fan_speed" : "' + str(currentDuty) + '"}'),CONFIG["influx_db_sensors"])
+        if temp > CONFIG["high_cpu_temp"]["temp"]:
+            fan.ChangeDutyCycle(CONFIG["high_cpu_temp"]["fan_speed"])
+            currentDuty = CONFIG["high_cpu_temp"]["fan_speed"]
+        else:
+            fan.ChangeDutyCycle(0)
+            currentDuty = 0
+        time.sleep(10)
+
+
+##################################################################
+
 
 # CTRL+C Handler
 def signal_handler(sig, frame):
@@ -328,6 +355,7 @@ def close():
     process1.terminate()
     process2.terminate()
     process3.terminate()
+    process4.terminate()
     sys.exit(0)
 
 ##################################################################
@@ -372,11 +400,14 @@ with serial.Serial(TTY, BAUD, timeout=1) as arduino:
         process3 = Process(target=fan_control, args=(e,))
         process3.start()
 
+        process4 = Process(target=fan_case_control, args=(e,))
+        process4.start()
+
         e.set()
         process1.join()
         process2.join()
         process3.join()
-
+        process4.join()
 
 if(not isConnected):
     print_debug("Error connecting to Arduino")
