@@ -24,12 +24,13 @@ def signal_handler(sig, frame):
 
 signal.signal(signal.SIGINT, signal_handler)
 IO.setwarnings(False)
-# GPIO14
+# GPIO Select
+GPIO_NUM = int(input("Which GPIO do you want to use? "))
 IO.setmode (IO.BCM)
-IO.setup(14,IO.OUT) 
-# Set GPIO14 as a PWM output, with 100Hz frequency 
+IO.setup(GPIO_NUM,IO.OUT) 
+# Set GPIO as a PWM output, with 100Hz frequency 
 # (this should match your fans specified PWM frequency)
-fan = IO.PWM(14,100)
+fan = IO.PWM(GPIO_NUM,100)
 fan.start(100)
 
 
