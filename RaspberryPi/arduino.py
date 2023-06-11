@@ -9,7 +9,7 @@
 #                       periodic read
 #                   2. connects to the Arduino board for 
 #                       one time read via Socket
-#                   3. RPi fan control - refer to PCB creation
+#                   -- 3. RPi fan control - refer to PCB creation
 #
 ##################################################################
 
@@ -330,7 +330,7 @@ def fan_case_control(e):
     while(True):
         temp = get_temp()
         write_to_db(INFLUX_DB_SENSORS,json.loads('{"ok" : "1", "cpu_temp" : "' + str(temp) + '", "current_case_fan_speed" : "' + str(currentDuty) + '"}'),CONFIG["influx_db_sensors"])
-        if temp > CONFIG["high_cpu_temp"]["temp"]:
+        if temp > CONFIG["mid_high_cpu_temp"]["temp"]:
             fan.ChangeDutyCycle(CONFIG["high_cpu_temp"]["fan_speed"])
             currentDuty = CONFIG["high_cpu_temp"]["fan_speed"]
         else:
@@ -354,8 +354,6 @@ def close():
     print("Closing...")
     process1.terminate()
     process2.terminate()
-    process3.terminate()
-    process4.terminate()
     sys.exit(0)
 
 ##################################################################
@@ -397,17 +395,9 @@ with serial.Serial(TTY, BAUD, timeout=1) as arduino:
         process2 = Process(target=one_time_read, args=(e,))
         process2.start()
 
-        process3 = Process(target=fan_control, args=(e,))
-        process3.start()
-
-        process4 = Process(target=fan_case_control, args=(e,))
-        process4.start()
-
         e.set()
         process1.join()
         process2.join()
-        process3.join()
-        process4.join()
 
 if(not isConnected):
     print_debug("Error connecting to Arduino")
