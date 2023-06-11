@@ -23,7 +23,7 @@
                       },
     "mid_high_cpu_temp" : {
                         "temp" : 50,
-                        "fan_speed" : 85  
+                        "fan_speed" : 100  
                     },
     "mid_low_cpu_temp" : {
                         "temp" : 40,
